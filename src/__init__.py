@@ -19,6 +19,9 @@ from .strategy import RegimeStrategy
 from .backtesting import BacktestEngine
 from .forecasting import RegimeForecaster
 
+# LLM Insights
+from .llm_insights import LLMInsightGenerator, InsightGenerator
+
 # Utilities
 from .utils import (
     MetricsCalculator,
@@ -50,6 +53,10 @@ __all__ = [
     'RegimeStrategy',
     'BacktestEngine',
     'RegimeForecaster',
+    
+    # LLM Insights
+    'LLMInsightGenerator',
+    'InsightGenerator',
     
     # Utilities
     'MetricsCalculator',

@@ -18,3 +18,7 @@ notebook==7.0.6
 
 # Optional: For advanced analysis
 statsmodels==0.14.0  # For Granger causality, VAR models
+
+# LLM & AI Insights
+openai==1.3.0  # GPT-4 powered financial insights
+python-dotenv==1.0.0  # For API key management
