@@ -16,8 +16,8 @@ import pandas as pd
 import numpy as np
 from openai import OpenAI
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# OpenAI client is initialized lazily inside _call_gpt() to avoid
+# crashing on import when OPENAI_API_KEY is not set.
 
 
 class LLMInsightGenerator:
@@ -27,16 +27,17 @@ class LLMInsightGenerator:
     Transforms quantitative analysis into investment-grade explanations.
     """
     
-    def __init__(self, model: str = "gpt-3.5-turbo", temperature: float = 0.7):
+    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.7):
         """
         Initialize LLM insight generator
         
         Parameters:
         -----------
         model : str
-            OpenAI model ('gpt-3.5-turbo' default, 'gpt-4' for higher quality if available)
+            OpenAI model to use (default: 'gpt-4o-mini', cost-efficient).
+            Use 'gpt-4o' or 'gpt-4-turbo' for highest quality.
         temperature : float
-            Creativity level (0.0-1.0, default 0.7)
+            Creativity level (0.0–1.0, default 0.7)
         """
         self.model = model
         self.temperature = temperature
@@ -59,7 +60,8 @@ class LLMInsightGenerator:
             GPT response
         """
         try:
-            response = client.chat.completions.create(
+            _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = _client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {

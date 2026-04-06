@@ -191,7 +191,9 @@ class RegimeForecaster:
         
         self.ml_model.fit(X_scaled, y)
         
-        # Compute accuracy
+        # Compute in-sample accuracy
+        # NOTE: This is training (in-sample) accuracy and will be optimistic.
+        # Use cross-validation (e.g., TimeSeriesSplit) for unbiased estimates.
         accuracy = self.ml_model.score(X_scaled, y)
         
         # Feature importance

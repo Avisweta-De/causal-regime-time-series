@@ -173,9 +173,9 @@ def handle_missing_values(data, method='forward_fill'):
     pd.DataFrame with NaNs handled
     """
     if method == 'forward_fill':
-        return data.fillna(method='ffill').fillna(method='bfill')
+        return data.ffill().bfill()
     elif method == 'backward_fill':
-        return data.fillna(method='bfill').fillna(method='ffill')
+        return data.bfill().ffill()
     elif method == 'interpolate':
         return data.interpolate(method='linear')
     elif method == 'drop':

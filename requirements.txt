@@ -7,14 +7,25 @@ yfinance>=0.2.0
 scikit-learn>=1.3.0
 scipy>=1.11.0
 
+# Econometrics
+statsmodels>=0.14.0  # Granger causality, VAR models
+
 # Visualization
 matplotlib>=3.8.0
 seaborn>=0.13.0
-streamlit>=1.28.0
+plotly>=5.18.0        # Interactive charts for Streamlit
 
-# Optional: For advanced analysis
-statsmodels>=0.14.0  # For Granger causality, VAR models
+# Streamlit App
+streamlit>=1.32.0
+
+# Jupyter (required to run the notebooks)
+jupyter>=1.0.0
+notebook>=7.0.0
+ipykernel>=6.0.0
 
 # LLM & AI Insights
-openai>=1.3.0  # GPT-4 powered financial insights
-python-dotenv>=1.0.0  # For API key management
+openai>=1.3.0          # GPT-4 powered financial insights
+python-dotenv>=1.0.0   # API key management via .env
+
+# Testing
+pytest>=7.4.0

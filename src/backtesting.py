@@ -7,7 +7,7 @@ Computes performance metrics and conducts walk-forward analysis.
 import pandas as pd
 import numpy as np
 from typing import Dict, Tuple, List, Optional
-from strategy import RegimeStrategy
+from .strategy import RegimeStrategy
 
 
 class BacktestEngine:
@@ -157,8 +157,8 @@ class BacktestEngine:
         pd.DataFrame
             Monthly returns and Sharpe ratios
         """
-        strat_monthly = self.strategy_returns.resample('M').sum()
-        bench_monthly = self.benchmark_returns.resample('M').sum()
+        strat_monthly = self.strategy_returns.resample('ME').sum()
+        bench_monthly = self.benchmark_returns.resample('ME').sum()
         
         monthly_df = pd.DataFrame({
             'Strategy': strat_monthly,

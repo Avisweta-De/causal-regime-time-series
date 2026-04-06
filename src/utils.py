@@ -212,8 +212,14 @@ class DataValidator:
         return stats
     
     @staticmethod
-    def check_missing_values(data_dict: Dict[str, pd.Series]) -> None:
-        """Check for missing values"""
+    def check_missing_values(data_dict: Dict[str, pd.Series]) -> bool:
+        """Check for missing values in all series.
+        
+        Returns
+        -------
+        bool
+            True if all series are clean (no missing values), False otherwise.
+        """
         print("\n" + "="*60)
         print("MISSING VALUES CHECK")
         print("="*60)
