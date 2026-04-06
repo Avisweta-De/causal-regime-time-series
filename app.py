@@ -85,14 +85,24 @@ def load_asset_data(ticker, start_date, end_date):
         # Download data
         data = yf.download(ticker, start=start_date, end=end_date, progress=False)
         
-        if data.empty:
+        if data is None or data.empty:
             return None
+        
+        # Ensure data is a DataFrame (not Series)
+        if isinstance(data, pd.Series):
+            data = data.to_frame(name=ticker)
         
         # Get the close price (try Adj Close first, then Close)
         if 'Adj Close' in data.columns:
-            return data['Adj Close']
+            prices = data['Adj Close'].dropna()
         elif 'Close' in data.columns:
-            return data['Close']
+            prices = data['Close'].dropna()
+        else:
+            return None
+        
+        # Ensure we have a pandas Series with index
+        if isinstance(prices, (pd.Series, pd.Index)):
+            return prices
         else:
             return None
             
@@ -106,7 +116,7 @@ def load_market_data(assets, start_date, end_date):
     
     for asset in assets:
         prices = load_asset_data(asset, start_date, end_date)
-        if prices is not None and len(prices) > 0:
+        if prices is not None and len(prices) > 1:  # Need at least 2 data points
             price_data[asset] = prices
         else:
             failed_assets.append(asset)
@@ -114,22 +124,22 @@ def load_market_data(assets, start_date, end_date):
     if not price_data:
         return None, "Could not load any assets. Check ticker symbols."
     
-    # Combine into DataFrame
-    df = pd.DataFrame(price_data)
-    df = df.dropna(how='all')  # Remove all-NaN rows
-    
-    # Forward fill gaps within 5 days
-    df = df.fillna(method='ffill', limit=5)
-    df = df.dropna()  # Remove any remaining NaN
-    
-    if len(df) < 10:
-        return None, "Not enough data points after cleaning"
-    
-    warning_msg = None
-    if failed_assets:
-        warning_msg = f"Could not load: {', '.join(failed_assets)}"
-    
-    return df, warning_msg
+    # Combine into DataFrame - ensure all are Series with proper index
+    try:
+        df = pd.concat(price_data, axis=1)
+        df.columns = list(price_data.keys())
+        df = df.dropna(how='all')  # Remove all-NaN rows
+        
+        # Forward fill gaps within 5 days (using newer syntax)
+        df = df.ffill(limit=5)
+        df = df.dropna()  # Remove any remaining NaN
+        
+        if len(df) < 10:
+            return None, "Not enough data points after cleaning"
+        
+        return df, None
+    except Exception as e:
+        return None, f"Error combining data: {str(e)}"
 
 # ============================================================================
 # LOAD DATA
@@ -140,15 +150,28 @@ price_data, warning_msg = load_market_data(assets, start_date, end_date)
 if warning_msg:
     st.warning(f"⚠️ {warning_msg}")
 
-if price_data is None:
+if price_data is None or price_data.empty:
     st.error("❌ Failed to load any valid data. Please try:")
-    st.markdown("- Different date range")
+    st.markdown("- Different date range (at least 2 months)")
     st.markdown("- Different assets (suggested: SPY, QQQ, IWM, VNQ, AGG)")
+    st.markdown("- Check your internet connection")
+    st.stop()
+
+# Ensure we have enough data
+if len(price_data) < 10:
+    st.error(f"Insufficient data: Only {len(price_data)} data points. Need at least 10.")
     st.stop()
 
 # Calculate returns
-returns_data = np.log(price_data / price_data.shift(1)).dropna()
-st.success(f"✅ Loaded {len(price_data)} trading days, {len(assets)} assets")
+try:
+    returns_data = np.log(price_data / price_data.shift(1)).dropna()
+    if returns_data.empty:
+        st.error("Could not calculate returns. Check data quality.")
+        st.stop()
+    st.success(f"✅ Loaded {len(price_data)} trading days, {len(assets)} assets")
+except Exception as e:
+    st.error(f"Error calculating returns: {str(e)}")
+    st.stop()
 
 # ============================================================================
 # TABS
