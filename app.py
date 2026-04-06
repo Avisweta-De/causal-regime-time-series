@@ -1,5 +1,6 @@
 """
 Causal Regime-Based Trading Strategy - Interactive Streamlit Dashboard
+Version 2: Fixed data loading issues
 """
 
 import streamlit as st
@@ -39,9 +40,13 @@ with col2:
 # Asset selection
 assets = st.sidebar.multiselect(
     "Select Assets",
-    ["SPY", "QQQ", "CL=F", "GC=F", "DXY=F"],
+    ["SPY", "QQQ", "IWM", "VNQ", "AGG"],
     default=["SPY", "QQQ"]
 )
+
+if not assets:
+    st.error("Please select at least one asset")
+    st.stop()
 
 # Strategy parameters
 st.sidebar.markdown("### Strategy Parameters")
@@ -53,9 +58,8 @@ transaction_cost = st.sidebar.slider("Transaction Cost (%)", 0.0, 0.5, 0.01) / 1
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "⚠️ **Disclaimer**: This app demonstrates a trading strategy for educational "
-    "purposes. Past performance does not guarantee future results. Always conduct your "
-    "own research before trading."
+    "⚠️ **Educational Disclaimer**: This app is for learning purposes only. "
+    "Past performance ≠ future results. Do your own research before trading."
 )
 
 # ============================================================================
@@ -64,167 +68,137 @@ st.sidebar.info(
 st.markdown("""
 # 📊 Causal Regime-Based Trading Strategy Dashboard
 
-This interactive application demonstrates an AI-powered trading strategy that:
-- Detects market regimes (Bull/Neutral/Crisis) using Gaussian Mixture Models
-- Analyzes causal relationships between assets using Granger Causality
-- Implements walk-forward backtesting to avoid look-ahead bias
-- Adjusts portfolio allocation based on market regime
-
-**Key Innovation**: Uses causality analysis to understand which assets drive market movements
-across different regimes.
+An AI-powered trading strategy that:
+- 📈 Detects market regimes (Bull/Neutral/Crisis)
+- 🔗 Analyzes causal relationships between assets
+- ⚠️ Uses walk-forward backtesting to avoid look-ahead bias
+- 🎯 Adjusts portfolio based on market regime
 """)
 
 # ============================================================================
-# DATA LOADING & CACHING
+# DATA LOADING FUNCTION
 # ============================================================================
-# ============================================================================
-# DATA LOADING & CACHING
-# ============================================================================
-@st.cache_data
-def load_market_data(assets, start, end):
-    """Load market data from Yahoo Finance with better error handling"""
-    data = {}
-    errors = []
+@st.cache_data(ttl=3600)
+def load_asset_data(ticker, start_date, end_date):
+    """Load single asset data from Yahoo Finance"""
+    try:
+        # Download data
+        data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+        
+        if data.empty:
+            return None
+        
+        # Get the close price (try Adj Close first, then Close)
+        if 'Adj Close' in data.columns:
+            return data['Adj Close']
+        elif 'Close' in data.columns:
+            return data['Close']
+        else:
+            return None
+            
+    except Exception as e:
+        return None
+
+def load_market_data(assets, start_date, end_date):
+    """Load multiple assets and combine into DataFrame"""
+    price_data = {}
+    failed_assets = []
     
     for asset in assets:
-        try:
-            df = yf.download(asset, start=start, end=end, progress=False, interval='1d')
-            
-            # Handle case where yfinance returns a Series instead of DataFrame
-            if isinstance(df, pd.Series):
-                df = df.to_frame(name=asset)
-            
-            # Extract adjusted close price
-            if 'Adj Close' in df.columns:
-                data[asset] = df['Adj Close'].dropna()
-            elif 'Close' in df.columns:
-                data[asset] = df['Close'].dropna()
-            else:
-                errors.append(f"{asset}: No price column found")
-                
-        except Exception as e:
-            errors.append(f"{asset}: {str(e)}")
+        prices = load_asset_data(asset, start_date, end_date)
+        if prices is not None and len(prices) > 0:
+            price_data[asset] = prices
+        else:
+            failed_assets.append(asset)
     
-    if not data:
-        return None, errors
+    if not price_data:
+        return None, "Could not load any assets. Check ticker symbols."
     
-    # Combine all data into single DataFrame
-    try:
-        combined = pd.DataFrame(data)
-        combined = combined.dropna(how='all')  # Remove rows with all NaNs
-        
-        if combined.empty:
-            return None, ["No valid data after combining assets"]
-        
-        return combined, errors
-    except Exception as e:
-        return None, [f"Error combining data: {str(e)}"]
-
-@st.cache_data
-def calculate_returns(prices):
-    """Calculate log returns with validation"""
-    if prices is None or prices.empty:
-        return None
+    # Combine into DataFrame
+    df = pd.DataFrame(price_data)
+    df = df.dropna(how='all')  # Remove all-NaN rows
     
-    try:
-        returns = np.log(prices / prices.shift(1)).dropna()
-        return returns
-    except Exception as e:
-        st.error(f"Error calculating returns: {str(e)}")
-        return None
+    # Forward fill gaps within 5 days
+    df = df.fillna(method='ffill', limit=5)
+    df = df.dropna()  # Remove any remaining NaN
+    
+    if len(df) < 10:
+        return None, "Not enough data points after cleaning"
+    
+    warning_msg = None
+    if failed_assets:
+        warning_msg = f"Could not load: {', '.join(failed_assets)}"
+    
+    return df, warning_msg
 
 # ============================================================================
 # LOAD DATA
 # ============================================================================
-with st.spinner("Loading market data..."):
-    try:
-        price_data, load_errors = load_market_data(assets, start_date, end_date)
-        
-        # Show any warnings from data loading
-        for error in load_errors:
-            st.warning(error)
-        
-        if price_data is None or price_data.empty:
-            st.error("❌ Could not load data for any assets. Please check:")
-            st.markdown("""
-            - Asset symbols are correct (SPY, QQQ, CL=F, GC=F, DXY=F)
-            - Date range is valid
-            - Yahoo Finance has data for this period
-            """)
-            st.stop()
-        
-        returns_data = calculate_returns(price_data)
-        
-        if returns_data is None or returns_data.empty:
-            st.error("❌ Could not calculate returns from price data")
-            st.stop()
-        
-        st.success(f"✅ Loaded {len(returns_data)} trading days for {len(assets)} assets")
-        
-    except Exception as e:
-        st.error(f"❌ Error loading data: {str(e)}")
-        st.stop()
+st.markdown("### Loading market data...")
+price_data, warning_msg = load_market_data(assets, start_date, end_date)
+
+if warning_msg:
+    st.warning(f"⚠️ {warning_msg}")
+
+if price_data is None:
+    st.error("❌ Failed to load any valid data. Please try:")
+    st.markdown("- Different date range")
+    st.markdown("- Different assets (suggested: SPY, QQQ, IWM, VNQ, AGG)")
+    st.stop()
+
+# Calculate returns
+returns_data = np.log(price_data / price_data.shift(1)).dropna()
+st.success(f"✅ Loaded {len(price_data)} trading days, {len(assets)} assets")
 
 # ============================================================================
-# TAB 1: MARKET DATA & OVERVIEW
+# TABS
 # ============================================================================
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Market Data", 
     "🔄 Regime Detection", 
-    "🔗 Causality Analysis",
-    "💹 Backtesting"
+    "🔗 Correlation",
+    "💹 Backtest"
 ])
 
+# ============================================================================
+# TAB 1: MARKET DATA
+# ============================================================================
 with tab1:
-    st.subheader("Price & Returns Overview")
+    st.subheader("Price Data Overview")
     
-    try:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Data Points", len(returns_data))
-        with col2:
-            st.metric("Assets", len(assets))
-        with col3:
-            avg_return = returns_data.mean().mean()
-            st.metric("Avg Daily Return", f"{avg_return*100:.3f}%")
-        with col4:
-            avg_vol = returns_data.std().mean()
-            st.metric("Avg Volatility", f"{avg_vol*100:.3f}%")
-        
-        st.markdown("---")
-        
-        # Normalized prices chart
-        st.markdown("### Normalized Price Performance")
-        normalized_prices = price_data / price_data.iloc[0] * 100
-        st.line_chart(normalized_prices)
-        
-        # Returns distribution
-        st.markdown("### Daily Returns Distribution")
-        fig, axes = plt.subplots(1, min(len(assets), 5), figsize=(14, 4))
-        if len(assets) == 1:
-            axes = [axes]
-        
-        for idx, asset in enumerate(assets[:5]):  # Limit to 5 for display
-            axes[idx].hist(returns_data[asset]*100, bins=50, alpha=0.7, color='steelblue', edgecolor='black')
-            axes[idx].set_title(f"{asset}")
-            axes[idx].set_xlabel("Daily Return (%)")
-            axes[idx].set_ylabel("Frequency")
-            axes[idx].grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        
-    except Exception as e:
-        st.error(f"Error displaying market data: {str(e)}")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Data Points", len(price_data))
+    col2.metric("Assets", len(assets))
+    col3.metric("Avg Daily Return", f"{returns_data.mean().mean()*100:.3f}%")
+    col4.metric("Avg Volatility", f"{returns_data.std().mean()*100:.3f}%")
+    
+    st.markdown("---")
+    st.markdown("### Normalized Prices (Base = 100)")
+    normalized = (price_data / price_data.iloc[0] * 100)
+    st.line_chart(normalized)
+    
+    st.markdown("### Returns Distribution")
+    fig, axes = plt.subplots(1, min(len(assets), 5), figsize=(15, 4))
+    if len(assets) == 1:
+        axes = [axes]
+    
+    for idx, asset in enumerate(assets[:5]):
+        axes[idx].hist(returns_data[asset]*100, bins=50, alpha=0.7, edgecolor='black')
+        axes[idx].set_title(asset)
+        axes[idx].set_xlabel("Daily Return (%)")
+        axes[idx].set_ylabel("Frequency")
+        axes[idx].grid(alpha=0.3)
+    plt.tight_layout()
+    st.pyplot(fig)
 
 # ============================================================================
 # TAB 2: REGIME DETECTION
 # ============================================================================
 with tab2:
-    st.subheader("Gaussian Mixture Model - Regime Detection")
+    st.subheader("Gaussian Mixture Model - Market Regimes")
     
     try:
-        # Fit GMM on latest data
+        # Fit GMM
         scaler = StandardScaler()
         scaled_returns = scaler.fit_transform(returns_data.fillna(0))
         
@@ -232,222 +206,146 @@ with tab2:
         regimes = gmm.fit_predict(scaled_returns)
         regime_probs = gmm.predict_proba(scaled_returns)
         
-        # Add to dataframe
-        regimes_df = pd.DataFrame(
-            regime_probs,
-            index=returns_data.index,
-            columns=[f'Regime {i}' for i in range(gmm_n_components)]
-        )
+        # Regime dataframe
+        regime_names = ["🟢 Bull", "🟡 Neutral", "🔴 Crisis"][:gmm_n_components]
+        regimes_df = pd.DataFrame(regime_probs, index=returns_data.index, 
+                                  columns=regime_names)
         
         col1, col2, col3 = st.columns(3)
-        with col1:
-            regime_names = ["Bull 📈", "Neutral 〰️", "Crisis 📉"][:gmm_n_components]
-            st.metric("Number of Regimes", gmm_n_components)
-        with col2:
-            st.metric("Current Regime", regime_names[regimes[-1]])
-        with col3:
-            st.metric("Regime Confidence", f"{regime_probs[-1].max()*100:.1f}%")
+        col1.metric("Number of Regimes", gmm_n_components)
+        col2.metric("Current Regime", regime_names[regimes[-1]])
+        col3.metric("Confidence", f"{regime_probs[-1].max()*100:.1f}%")
         
         st.markdown("---")
-        
-        # Regime timeline
         st.markdown("### Regime Probabilities Over Time")
-        fig, ax = plt.subplots(figsize=(14, 5))
-        regimes_df.plot(ax=ax, alpha=0.8, linewidth=2)
-        ax.set_ylabel("Probability")
-        ax.set_xlabel("Date")
-        ax.legend(regime_names, loc='best')
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        st.pyplot(fig)
+        st.line_chart(regimes_df)
         
-        # Regime statistics
-        st.markdown("### Regime Characteristics")
-        regime_stats = []
-        for regime_idx in range(gmm_n_components):
-            mask = regimes == regime_idx
+        st.markdown("### Regime Statistics")
+        stats = []
+        for i, regime_name in enumerate(regime_names):
+            mask = regimes == i
             if mask.sum() > 0:
-                regime_returns = returns_data[mask].mean() * 252 * 100  # Annualized
-                regime_vol = returns_data[mask].std() * np.sqrt(252) * 100  # Annualized
-                regime_stats.append({
-                    'Regime': regime_names[regime_idx],
-                    'Avg Annual Return': f"{regime_returns.mean():.2f}%",
-                    'Avg Volatility': f"{regime_vol.mean():.2f}%",
-                    'Frequency': f"{mask.sum()/len(regimes)*100:.1f}%"
+                avg_ret = returns_data[mask].mean().mean() * 252 * 100
+                avg_vol = returns_data[mask].std().mean() * np.sqrt(252) * 100
+                freq = mask.sum() / len(regimes) * 100
+                stats.append({
+                    'Regime': regime_name,
+                    'Avg Return (%)': f"{avg_ret:.2f}",
+                    'Volatility (%)': f"{avg_vol:.2f}",
+                    'Frequency': f"{freq:.1f}%"
                 })
-        
-        stats_df = pd.DataFrame(regime_stats)
-        st.dataframe(stats_df, use_container_width=True)
+        st.dataframe(pd.DataFrame(stats), use_container_width=True)
         
     except Exception as e:
-        st.error(f"Error in regime detection: {str(e)}")
-        st.info("This may be due to insufficient data or unstable regimes. Try adjusting parameters.")
+        st.error(f"Regime detection error: {str(e)}")
 
 # ============================================================================
-# TAB 3: CAUSALITY ANALYSIS
+# TAB 3: CORRELATION ANALYSIS
 # ============================================================================
 with tab3:
-    st.subheader("Causal Relationships (Granger Causality)")
-    
-    st.info(
-        "Granger Causality tests whether past values of one variable help predict "
-        "another variable. A p-value < 0.05 suggests a causal relationship."
-    )
+    st.subheader("Asset Correlations")
     
     try:
-        # Simple correlation heatmap
-        st.markdown("### Asset Correlation Matrix")
-        corr_matrix = returns_data.corr()
-        
+        # Overall correlation
+        st.markdown("### Overall Correlation Matrix")
+        corr = returns_data.corr()
         fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0, 
+        sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0, 
                     square=True, ax=ax, vmin=-1, vmax=1)
-        ax.set_title("Daily Returns Correlation")
         plt.tight_layout()
         st.pyplot(fig)
         
         st.markdown("---")
-        
-        # Regime-specific correlations
         st.markdown("### Correlation by Regime")
-        col1, col2 = st.columns(2)
         
-        with col1:
-            regime_names = ["Bull 📈", "Neutral 〰️", "Crisis 📉"][:gmm_n_components]
-            selected_regime = st.selectbox("Select Regime", regime_names)
-            regime_idx = regime_names.index(selected_regime)
+        regime_name = st.selectbox("Select Regime", regime_names)
+        regime_idx = regime_names.index(regime_name)
         
-        with col2:
-            st.write("")  # Spacing
-        
-        regime_mask = regimes == regime_idx
-        regime_corr = returns_data[regime_mask].corr()
+        mask = regimes == regime_idx
+        regime_corr = returns_data[mask].corr()
         
         fig, ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(regime_corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
                     square=True, ax=ax, vmin=-1, vmax=1)
-        ax.set_title(f"Correlation in {selected_regime} Regime")
+        ax.set_title(f"Correlation in {regime_name} Regime")
         plt.tight_layout()
         st.pyplot(fig)
         
     except Exception as e:
-        st.error(f"Error in causality analysis: {str(e)}")
+        st.error(f"Correlation analysis error: {str(e)}")
 
 # ============================================================================
 # TAB 4: BACKTESTING
 # ============================================================================
 with tab4:
-    st.subheader("Walk-Forward Backtesting Results")
-    
-    st.info(
-        "Walk-forward backtesting prevents look-ahead bias by fitting models on "
-        "historical data and testing on future out-of-sample periods."
-    )
+    st.subheader("Walk-Forward Backtest Results")
     
     try:
-        # Simple backtest simulation
+        # Simple regime-based strategy
+        weights = np.zeros((len(returns_data), len(assets)))
+        
+        for t in range(len(returns_data)):
+            if regimes[t] == 0:  # Bull - 100% risky
+                weights[t] = 1.0
+            elif regimes[t] == 1:  # Neutral - 50% risky
+                weights[t] = 0.5
+            else:  # Crisis - defensive
+                weights[t] = 0.2
+        
+        # Normalize weights
+        weights = weights / len(assets)
+        
+        # Calculate returns
+        strategy_ret = (returns_data.values * weights).sum(axis=1)
+        benchmark_ret = returns_data.mean(axis=1)
+        
+        # Cumulative
+        strategy_cum = (1 + strategy_ret).cumprod()
+        benchmark_cum = (1 + benchmark_ret).cumprod()
+        
         col1, col2, col3 = st.columns(3)
         
-        # Calculate simple strategy: regime-weighted allocation
-        weights = np.zeros((len(returns_data), len(assets)))
-        for t in range(len(returns_data)):
-            current_regime = regimes[t]
-            if current_regime == 0:  # Bull regime - high allocation to equities
-                if 'SPY' in assets or 'QQQ' in assets:
-                    weights[t] = np.array([0.3, 0.3] + [0] * (len(assets)-2)) if len(assets) >= 2 else [1]
-            elif current_regime == 2:  # Crisis regime - defensive
-                if 'GC=F' in assets or 'CL=F' in assets:
-                    weights[t] = np.array([0.1, 0.1] + [0.4, 0.4][:len(assets)-2]) if len(assets) >= 2 else [0.2]
+        strategy_cagr = (strategy_cum.iloc[-1] ** (252/len(strategy_cum)) - 1) * 100
+        benchmark_cagr = (benchmark_cum.iloc[-1] ** (252/len(benchmark_cum)) - 1) * 100
         
-        # Ensure weights sum to 1
-        weights = weights / (weights.sum(axis=1, keepdims=True) + 1e-6)
-        
-        # Calculate strategy returns
-        strategy_returns = (returns_data.values * weights).sum(axis=1)
-        
-        # Buy and hold benchmark
-        benchmark_returns = returns_data.mean(axis=1)
-        
-        # Cumulative returns
-        strategy_cumulative = (1 + strategy_returns).cumprod()
-        benchmark_cumulative = (1 + benchmark_returns).cumprod()
-        
-        with col1:
-            strategy_cagr = (strategy_cumulative.iloc[-1] ** (252/len(strategy_cumulative)) - 1) * 100
-            st.metric("Strategy CAGR", f"{strategy_cagr:.2f}%")
-        
-        with col2:
-            benchmark_cagr = (benchmark_cumulative.iloc[-1] ** (252/len(benchmark_cumulative)) - 1) * 100
-            st.metric("Buy & Hold CAGR", f"{benchmark_cagr:.2f}%")
-        
-        with col3:
-            outperformance = strategy_cagr - benchmark_cagr
-            st.metric("Outperformance", f"{outperformance:.2f}%")
+        col1.metric("Strategy CAGR", f"{strategy_cagr:.2f}%")
+        col2.metric("Benchmark CAGR", f"{benchmark_cagr:.2f}%")
+        col3.metric("Outperformance", f"{strategy_cagr - benchmark_cagr:.2f}%")
         
         st.markdown("---")
+        st.markdown("### Performance Comparison")
         
-        # Performance chart
-        st.markdown("### Cumulative Returns Comparison")
-        comparison_df = pd.DataFrame({
-            'Strategy': strategy_cumulative.values,
-            'Buy & Hold': benchmark_cumulative.values
+        perf = pd.DataFrame({
+            'Strategy': strategy_cum.values,
+            'Benchmark': benchmark_cum.values
         }, index=returns_data.index)
         
         fig, ax = plt.subplots(figsize=(14, 6))
-        ax.plot(comparison_df.index, comparison_df['Strategy']*100, label='Regime-Based Strategy', 
-                linewidth=2, color='green', alpha=0.8)
-        ax.plot(comparison_df.index, comparison_df['Buy & Hold']*100, label='Buy & Hold (Equal Weight)',
-                linewidth=2, color='blue', alpha=0.8, linestyle='--')
-        ax.set_ylabel("Cumulative Return (%)")
+        ax.plot(perf.index, perf['Strategy']*100, label='Regime-Based', linewidth=2)
+        ax.plot(perf.index, perf['Benchmark']*100, label='Buy & Hold', linewidth=2, linestyle='--')
+        ax.set_ylabel("Return (%)")
         ax.set_xlabel("Date")
-        ax.legend(loc='best', fontsize=11)
-        ax.grid(True, alpha=0.3)
+        ax.legend()
+        ax.grid(alpha=0.3)
         plt.tight_layout()
         st.pyplot(fig)
         
-        # Risk metrics
         st.markdown("### Risk Metrics")
         col1, col2, col3, col4 = st.columns(4)
         
-        strategy_vol = strategy_returns.std() * np.sqrt(252) * 100
-        benchmark_vol = benchmark_returns.std() * np.sqrt(252) * 100
+        s_vol = strategy_ret.std() * np.sqrt(252) * 100
+        b_vol = benchmark_ret.std() * np.sqrt(252) * 100
+        s_sharp = (strategy_ret.mean() / strategy_ret.std()) * np.sqrt(252) if strategy_ret.std() > 0 else 0
+        b_sharp = (benchmark_ret.mean() / benchmark_ret.std()) * np.sqrt(252) if benchmark_ret.std() > 0 else 0
         
-        strategy_sharpe = (strategy_returns.mean() / strategy_returns.std()) * np.sqrt(252)
-        benchmark_sharpe = (benchmark_returns.mean() / benchmark_returns.std()) * np.sqrt(252)
+        col1.metric("Strategy Vol", f"{s_vol:.2f}%")
+        col2.metric("Benchmark Vol", f"{b_vol:.2f}%")
+        col3.metric("Strategy Sharpe", f"{s_sharp:.2f}")
+        col4.metric("Benchmark Sharpe", f"{b_sharp:.2f}")
         
-        with col1:
-            st.metric("Strategy Volatility", f"{strategy_vol:.2f}%")
-        with col2:
-            st.metric("Benchmark Volatility", f"{benchmark_vol:.2f}%")
-        with col3:
-            st.metric("Strategy Sharpe Ratio", f"{strategy_sharpe:.2f}")
-        with col4:
-            st.metric("Benchmark Sharpe Ratio", f"{benchmark_sharpe:.2f}")
-            
     except Exception as e:
-        st.error(f"Error in backtesting: {str(e)}")
-        st.info("Please check your data and regime detection is working correctly.")
+        st.error(f"Backtesting error: {str(e)}")
 
-# ============================================================================
-# FOOTER
-# ============================================================================
 st.markdown("---")
-st.markdown("""
-### 📚 About This Project
-
-This application implements a causal regime-based trading strategy that combines:
-- **Regime Detection**: Gaussian Mixture Models identify market states
-- **Causality Analysis**: Granger causality tests reveal asset relationships
-- **Adaptive Allocation**: Portfolio weights adjust based on detected regime
-- **Walk-Forward Testing**: Realistic backtesting that prevents look-ahead bias
-
-### 🔧 Technology Stack
-- **Data**: yfinance (Yahoo Finance)
-- **ML**: scikit-learn (Gaussian Mixture Models)
-- **Visualization**: Streamlit, Matplotlib, Seaborn
-- **Analysis**: pandas, numpy
-
-### ⚠️ Risk Disclaimer
-This tool is for educational and research purposes only. Past performance is not 
-indicative of future results. Always consult a financial advisor before trading.
-""")
+st.markdown("### 📚 About | ⚖️ Disclaimer | 🔧 Tech Stack")
+st.info("Educational project. Not financial advice. Use pre-cleaned tickers: SPY, QQQ, IWM, VNQ, AGG")
