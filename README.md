@@ -2,11 +2,6 @@
 
 > **A production-grade quantitative finance system that detects hidden market regimes, reveals asset causality, and translates complex econometric analysis into actionable investment insights.**
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-success)](README.md)
-[![Contributions](https://img.shields.io/badge/Contributions-Welcome-brightgreen)](CONTRIBUTING.md)
-
 ---
 
 ## 🎯 What This Project Does
