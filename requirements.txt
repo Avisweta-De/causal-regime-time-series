@@ -10,6 +10,7 @@ scipy==1.11.4
 # Visualization
 matplotlib==3.8.2
 seaborn==0.13.0
+streamlit==1.28.1
 
 # Jupyter & Development
 jupyter==1.0.0
