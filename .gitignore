@@ -39,8 +39,5 @@ results/tables/*.csv
 # Environment
 .env
 
-# Streamlit secrets (contains API keys — NEVER commit)
-.streamlit/secrets.toml
-
 # Cache
 .cache/

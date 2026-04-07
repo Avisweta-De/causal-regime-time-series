@@ -421,7 +421,6 @@ Areas for improvement:
 - [ ] Add more assets (bonds TLT, crypto BTC-USD, sector ETFs)
 - [ ] Implement Kalman filter for online regime prediction
 - [ ] Add sentiment analysis (VIX, Fed speeches)
-- [ ] Build Streamlit dashboard for live regime tracking
 - [ ] Optimize allocation rules (Kelly criterion, volatility targeting)
 - [ ] Expand unit test coverage with `TimeSeriesSplit` cross-validation
 

@@ -72,8 +72,6 @@ python -m pytest tests/ -v
 | 📈 **Strategies** | Kelly criterion, volatility targeting, mean-reversion |
 | 🧪 **Tests** | Expand `tests/` with unit tests for each module |
 | 📚 **Docs** | Improve notebooks, add inline comments to complex logic |
-| 🌐 **Dashboard** | Streamlit or Dash web UI for live regime tracking |
-| 🔌 **API** | FastAPI endpoint for real-time regime predictions |
 
 ---
 
