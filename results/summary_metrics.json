@@ -1,0 +1,53 @@
+{
+  "settings": {
+    "refit": "monthly",
+    "train_window_days": 504,
+    "feature_window_days": 20,
+    "signal_lag_days": 1,
+    "cost_bps": 5.0,
+    "random_state": 42
+  },
+  "period": "2012-02-02 to 2024-12-30",
+  "average_equity_weight": 0.6648,
+  "original_same_day_in_sample": {
+    "total_return": 36.1631,
+    "cagr": 0.2731,
+    "sharpe": 2.529,
+    "max_drawdown": -0.0734
+  },
+  "original_regimes_applied_next_day": {
+    "total_return": 4.2941,
+    "cagr": 0.1178,
+    "sharpe": 0.86,
+    "max_drawdown": -0.2049
+  },
+  "walk_forward": {
+    "regime_strategy": {
+      "cagr": 0.0891,
+      "volatility": 0.0953,
+      "sharpe": 0.944,
+      "max_drawdown": -0.1573
+    },
+    "constant_mix": {
+      "cagr": 0.0835,
+      "volatility": 0.1107,
+      "sharpe": 0.78,
+      "max_drawdown": -0.2353
+    },
+    "buy_and_hold": {
+      "cagr": 0.123,
+      "volatility": 0.1666,
+      "sharpe": 0.78,
+      "max_drawdown": -0.3392
+    }
+  },
+  "robustness_runs": 30,
+  "robustness_counts": {
+    "Smaller max drawdown than buy & hold": 30,
+    "Higher Sharpe than buy & hold": 10,
+    "Higher CAGR than buy & hold": 0,
+    "Smaller max drawdown than fixed mix": 21,
+    "Higher Sharpe than fixed mix": 10,
+    "Higher CAGR than fixed mix": 5
+  }
+}

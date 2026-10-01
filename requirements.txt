@@ -1,0 +1,24 @@
+# Core (tested with pandas 3.0, numpy 2.4, scikit-learn 1.8)
+pandas>=2.2
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.3
+matplotlib>=3.8
+jinja2>=3.1            # formatted tables in notebooks
+
+# Data download (notebook 01 only)
+yfinance>=0.2.40
+
+# Econometrics: ADF, VAR, impulse responses (Granger tests work without it)
+statsmodels>=0.14.0
+
+# Optional LLM narration (notebook 05)
+openai>=1.3.0
+python-dotenv>=1.0.0
+
+# Notebooks and tests
+jupyter
+pytest>=7.0
+
+# Optional: HMM regime detector
+# hmmlearn>=0.3
